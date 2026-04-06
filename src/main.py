@@ -1,0 +1,214 @@
+"""
+Main evaluation pipeline.
+
+Usage:
+    python src/main.py cranfield
+    python src/main.py lisa
+"""
+
+import sys
+import json
+import os
+
+sys.path.insert(0, os.path.dirname(__file__))
+from load_embeddings import load_embeddings
+from eval import (
+    precision_at_k, reciprocal_rank, average_precision,
+    build_sim_dict, build_split_sim_dict,
+)
+
+def load_relevance(dataset: str) -> dict:
+    """Load relevance judgements for a dataset.
+
+    Returns dict of {query_id: [relevant_doc_ids]}
+    """
+    if dataset == "cranfield":
+        import ir_datasets
+        ds = ir_datasets.load("cranfield")
+        relevant = {}
+        for qrel in ds.qrels_iter():
+            qid = str(qrel.query_id)
+            did = str(qrel.doc_id)
+            if qrel.relevance > 0:
+                if qid not in relevant:
+                    relevant[qid] = []
+                relevant[qid].append(did)
+        return relevant
+
+    elif dataset == "lisa":
+        # LISA relevance judgements (35 queries)
+        return {
+            "1": ["3392", "3396"],
+            "2": ["2623", "4291"],
+            "3": ["1407", "1431", "3794", "3795", "3796"],
+            "4": ["604", "3527", "4644", "5087", "5112", "5113", "5295"],
+            "5": ["3401"],
+            "6": ["111", "112", "113", "1100", "1581", "1582", "2090", "2616", "2620", "3647",
+                  "4155", "5066", "5068", "5626", "5627", "5628", "5629", "5631"],
+            "7": ["277", "278", "279", "1277", "1278", "1769", "2279", "3265", "3267",
+                  "3450", "3789", "5220", "5748", "5778"],
+            "8": ["40", "49", "199", "524", "697", "701", "1043", "1044", "1190", "1191",
+                  "1534", "1677", "2039", "2545", "3045", "3716", "4485", "4486",
+                  "4499", "4717", "5011", "5170", "5533", "5534", "5723", "5816"],
+            "9": ["178", "680", "681", "1412", "3178", "3689", "3922", "4374",
+                  "4692", "4693", "5706", "5859"],
+            "10": ["769", "770", "1309", "1310", "1807", "2318", "2319", "2321",
+                   "2407", "3814", "4290", "4804", "5800", "5801"],
+            "11": ["1046"],
+            "12": ["358", "1141", "5101"],
+            "13": ["5000", "5001"],
+            "14": ["576", "579", "580", "585", "1082", "2319", "2627", "3628",
+                   "4589", "4591", "5386"],
+            "15": ["287", "422", "877", "1407", "2799", "2800", "3274",
+                   "3794", "3795", "3796", "3893", "3898", "3920",
+                   "3955", "3956", "3957", "3958", "4279", "4280",
+                   "4281", "4362", "4367", "5918"],
+            "16": ["743", "2151", "5201"],
+            "17": ["716", "1262", "1790", "2180", "2777", "2779", "2952"],
+            "18": ["403", "404", "405", "440", "441", "936", "939", "940", "950",
+                   "1414", "1415", "1416", "1913", "1934", "1935", "1936",
+                   "1937", "1938", "1939", "1941", "1942", "1943", "1944",
+                   "1945", "1946", "1948", "1949", "1951", "2424", "2425",
+                   "2426", "2449", "2450", "2455", "2915", "2916", "2955",
+                   "3410", "3453", "3454", "3481", "3928", "3929", "3930",
+                   "3976", "3977", "3987", "4397", "4398", "4399",
+                   "5919", "5920", "5950"],
+            "19": ["166", "256", "270", "430", "1636", "2171", "2236",
+                   "2760", "2916", "3242", "3254", "3679", "3781", "5206"],
+            "20": ["489", "490", "1497", "3391", "3901", "6004"],
+            "21": ["434", "882", "1429", "1894", "1899", "2416", "2934",
+                   "2947", "3405", "3407", "3900", "3902", "3903",
+                   "3942", "3943", "3954", "3966", "5382", "5386",
+                   "5933", "5939"],
+            "22": ["5699"],
+            "23": ["267", "1259", "1260", "1261", "1262", "1751", "1790",
+                   "2180", "2284", "2776", "2777", "2778", "2779",
+                   "3778", "4763", "5136", "5215", "5216"],
+            "24": ["2410", "2949", "3398", "3452", "3972", "4391"],
+            "25": ["2949", "3448"],
+            "26": ["218", "1198", "2199", "2736", "2738", "3207",
+                   "3731", "3732", "4231", "4232"],
+            "27": ["1186", "1424", "1775", "2791", "4170", "4708", "5720"],
+            "28": ["442", "1426", "1918", "1919", "2712", "2932",
+                   "2933", "3389", "3801", "3938", "4290"],
+            "29": ["246", "248", "260", "261", "652", "733", "748",
+                   "811", "812", "1256", "1270", "1279", "1458",
+                   "1547", "1704", "1773", "2231", "2238", "2316",
+                   "2744", "2745", "2757", "3175", "3259", "3736",
+                   "3910", "4238", "4493", "4567", "4766", "4978",
+                   "5203", "5213"],
+            "30": ["916", "917", "1796", "1921", "1922", "2416",
+                   "2436", "2556", "3435", "3943", "3946", "3947"],
+            "31": ["934", "1433", "2898", "2899", "2948", "2950",
+                   "3386", "3396", "4284", "4365"],
+            "32": ["400", "1897", "2440", "3917", "3918", "3922", "4360"],
+            "33": ["611", "1122", "1297", "1529", "2135", "2559",
+                   "2648", "2864", "5340"],
+            "34": ["3384"],
+            "35": ["738", "1217", "2246", "2284", "2772", "3276", "3799"],
+        }
+    else:
+        raise ValueError(f"Unknown dataset: {dataset}")
+
+
+def evaluate(dataset: str, k=10):
+    """Run full evaluation pipeline for a dataset."""
+    data_dir = f"{dataset}/data"
+    results_dir = f"{dataset}/results"
+
+    print(f"Loading embeddings for {dataset}...")
+    query_embeds = load_embeddings(f"{data_dir}/query_embeddings.json")
+    original = load_embeddings(f"{data_dir}/original_embeddings.json")
+    merge = load_embeddings(f"{data_dir}/merge_embeddings.json")
+    merge2 = load_embeddings(f"{data_dir}/merge2_embeddings.json")
+    merge3 = load_embeddings(f"{data_dir}/merge3_embeddings.json")
+
+    relevant = load_relevance(dataset)
+
+    conditions = {
+        "original": original,
+        "merge": merge,
+        "merge2": merge2,
+        "merge3": merge3,
+    }
+
+    # Per-query scores
+    scores = {
+        "OP": [], "MP": [], "MMP": [], "MMMP": [],
+        "ORR": [], "MRR": [], "MMRR": [], "MMMRR": [],
+        "OAP": [], "MAP": [], "MMAP": [], "MMMAP": [],
+    }
+
+    key_map = {
+        "original": ("OP", "ORR", "OAP"),
+        "merge": ("MP", "MRR", "MAP"),
+        "merge2": ("MMP", "MMRR", "MMAP"),
+        "merge3": ("MMMP", "MMMRR", "MMMAP"),
+    }
+
+    query_ids = sorted(relevant.keys(), key=lambda x: int(x))
+    print(f"Evaluating {len(query_ids)} queries across 4 conditions...")
+
+    for qid in query_ids:
+        if qid not in query_embeds:
+            continue
+
+        q_vec = query_embeds[qid]
+        rel = relevant[qid]
+
+        for cond_name, cond_embeds in conditions.items():
+            sim_dict = build_sim_dict(q_vec, cond_embeds)
+            p_key, rr_key, ap_key = key_map[cond_name]
+
+            scores[p_key].append(precision_at_k(sim_dict, rel, k))
+            scores[rr_key].append(reciprocal_rank(sim_dict, rel))
+            scores[ap_key].append(average_precision(sim_dict, rel))
+
+    # Compute means
+    mean_scores = {
+        "PAK": [
+            sum(scores["OP"]) / len(scores["OP"]),
+            sum(scores["MP"]) / len(scores["MP"]),
+            sum(scores["MMP"]) / len(scores["MMP"]),
+            sum(scores["MMMP"]) / len(scores["MMMP"]),
+        ],
+        "RR": [
+            sum(scores["ORR"]) / len(scores["ORR"]),
+            sum(scores["MRR"]) / len(scores["MRR"]),
+            sum(scores["MMRR"]) / len(scores["MMRR"]),
+            sum(scores["MMMRR"]) / len(scores["MMMRR"]),
+        ],
+        "AP": [
+            sum(scores["OAP"]) / len(scores["OAP"]),
+            sum(scores["MAP"]) / len(scores["MAP"]),
+            sum(scores["MMAP"]) / len(scores["MMAP"]),
+            sum(scores["MMMAP"]) / len(scores["MMMAP"]),
+        ],
+    }
+
+    # Print results
+    conds = ["Original", "Merge", "Merge×2", "Merge×3"]
+    print(f"\n===== {dataset.upper()} RESULTS (K={k}) =====")
+    for i, cond in enumerate(conds):
+        print(f"{cond:12s} -> P@{k}: {mean_scores['PAK'][i]:.4f}, "
+              f"MRR: {mean_scores['RR'][i]:.4f}, "
+              f"MAP: {mean_scores['AP'][i]:.4f}")
+
+    # Save
+    os.makedirs(results_dir, exist_ok=True)
+
+    with open(f"{results_dir}/evaluation_scores.json", "w") as f:
+        json.dump(scores, f, indent=2)
+
+    with open(f"{results_dir}/mean_evaluation_scores.json", "w") as f:
+        json.dump(mean_scores, f, indent=2)
+
+    print(f"\nResults saved to {results_dir}/")
+    return scores, mean_scores
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Usage: python src/main.py <cranfield|lisa>")
+        sys.exit(1)
+    evaluate(sys.argv[1])
