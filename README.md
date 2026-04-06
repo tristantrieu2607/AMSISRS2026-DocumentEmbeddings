@@ -38,6 +38,10 @@ This project investigates how multiple topics are represented within document em
 ## Repository Structure
 
 ```
+├── main.py                    # Evaluation pipeline
+├── run_ttest.py               # Paired t-tests
+├── plot_results.py            # Performance decay & AP plots
+├── plot_tables.py             # Table figure generation
 ├── cranfield/                 # Cranfield dataset
 │   ├── data/                  #   Embedding files (.json)
 │   └── results/               #   Evaluation scores & t-tests
@@ -47,20 +51,17 @@ This project investigates how multiple topics are represented within document em
 ├── src/
 │   ├── eval.py                # Evaluation metrics (shared)
 │   ├── load_embeddings.py     # Embedding loader (shared)
-│   ├── main.py                # Full evaluation pipeline (shared)
-│   ├── run_ttest.py           # Paired t-tests (shared)
-│   ├── plot_results.py        # Performance decay & AP plots (shared)
-│   ├── plot_tables.py         # Table figure generation (shared)
-│   ├── cranfield/             # Cranfield-specific preprocessing
-│   │   ├── preprocess.py      #   Load docs/queries via ir_datasets
-│   │   ├── original.py        #   Generate original embeddings
-│   │   ├── merge.py           #   Generate merged embeddings
-│   │   └── split.py           #   Generate split embeddings
-│   └── lisa/                  # LISA-specific preprocessing
-│       ├── preprocess.py      #   Load docs/queries from Part files
-│       ├── original.py        #   Generate original embeddings
-│       ├── merge.py           #   Generate merged embeddings
-│       └── split.py           #   Generate split embeddings
+│   ├── relevance.py           # Relevance judgements (shared)
+│   ├── cranfield/             # Cranfield preprocessing & embedding generation
+│   │   ├── preprocess.py
+│   │   ├── original.py
+│   │   ├── merge.py
+│   │   └── split.py
+│   └── lisa/                  # LISA preprocessing & embedding generation
+│       ├── preprocess.py
+│       ├── original.py
+│       ├── merge.py
+│       └── split.py
 ├── figures/                   # Generated plots (4 per dataset)
 ├── docs/                      # Research report
 ├── .gitignore
@@ -69,6 +70,8 @@ This project investigates how multiple topics are represented within document em
 ```
 
 ## Usage
+
+All commands are run from the project root.
 
 ### Install dependencies
 
@@ -79,31 +82,36 @@ pip install -r requirements.txt
 ### Run evaluation
 
 ```bash
-python src/main.py cranfield
-python src/main.py lisa
+python main.py cranfield
+python main.py lisa
 ```
 
 ### Run paired t-tests
 
 ```bash
-python src/run_ttest.py cranfield
-python src/run_ttest.py lisa
+python run_ttest.py cranfield
+python run_ttest.py lisa
 ```
 
 ### Generate figures
 
 ```bash
-python src/plot_results.py cranfield
-python src/plot_results.py lisa
-python src/plot_tables.py cranfield
-python src/plot_tables.py lisa
+python plot_results.py cranfield
+python plot_results.py lisa
+python plot_tables.py cranfield
+python plot_tables.py lisa
 ```
 
 ### Regenerate embeddings (requires Ollama with nomic-embed-text)
 
 ```bash
 cd src/cranfield && python original.py
+cd src/cranfield && python merge.py
+cd src/cranfield && python split.py
+
 cd src/lisa && python original.py
+cd src/lisa && python merge.py
+cd src/lisa && python split.py
 ```
 
 ## Model

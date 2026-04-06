@@ -1,27 +1,8 @@
-"""
-Main evaluation pipeline.
+"""Relevance judgements for Cranfield and LISA datasets."""
 
-Usage:
-    python src/main.py cranfield
-    python src/main.py lisa
-"""
 
-import sys
-import json
-import os
-
-sys.path.insert(0, os.path.dirname(__file__))
-from load_embeddings import load_embeddings
-from eval import (
-    precision_at_k, reciprocal_rank, average_precision,
-    build_sim_dict, build_split_sim_dict,
-)
-
-def load_relevance(dataset: str) -> dict:
-    """Load relevance judgements for a dataset.
-
-    Returns dict of {query_id: [relevant_doc_ids]}
-    """
+def load_relevance(dataset):
+    """Load relevance judgements. Returns {query_id: [doc_ids]}."""
     if dataset == "cranfield":
         import ir_datasets
         ds = ir_datasets.load("cranfield")
@@ -36,7 +17,6 @@ def load_relevance(dataset: str) -> dict:
         return relevant
 
     elif dataset == "lisa":
-        # LISA relevance judgements (35 queries)
         return {
             "1": ["3392", "3396"],
             "2": ["2623", "4291"],
@@ -54,9 +34,7 @@ def load_relevance(dataset: str) -> dict:
                   "4692", "4693", "5706", "5859"],
             "10": ["769", "770", "1309", "1310", "1807", "2318", "2319", "2321",
                    "2407", "3814", "4290", "4804", "5800", "5801"],
-            "11": ["1046"],
-            "12": ["358", "1141", "5101"],
-            "13": ["5000", "5001"],
+            "11": ["1046"], "12": ["358", "1141", "5101"], "13": ["5000", "5001"],
             "14": ["576", "579", "580", "585", "1082", "2319", "2627", "3628",
                    "4589", "4591", "5386"],
             "15": ["287", "422", "877", "1407", "2799", "2800", "3274",
@@ -109,106 +87,3 @@ def load_relevance(dataset: str) -> dict:
         }
     else:
         raise ValueError(f"Unknown dataset: {dataset}")
-
-
-def evaluate(dataset: str, k=10):
-    """Run full evaluation pipeline for a dataset."""
-    data_dir = f"{dataset}/data"
-    results_dir = f"{dataset}/results"
-
-    print(f"Loading embeddings for {dataset}...")
-    query_embeds = load_embeddings(f"{data_dir}/query_embeddings.json")
-    original = load_embeddings(f"{data_dir}/original_embeddings.json")
-    merge = load_embeddings(f"{data_dir}/merge_embeddings.json")
-    merge2 = load_embeddings(f"{data_dir}/merge2_embeddings.json")
-    merge3 = load_embeddings(f"{data_dir}/merge3_embeddings.json")
-
-    relevant = load_relevance(dataset)
-
-    conditions = {
-        "original": original,
-        "merge": merge,
-        "merge2": merge2,
-        "merge3": merge3,
-    }
-
-    # Per-query scores
-    scores = {
-        "OP": [], "MP": [], "MMP": [], "MMMP": [],
-        "ORR": [], "MRR": [], "MMRR": [], "MMMRR": [],
-        "OAP": [], "MAP": [], "MMAP": [], "MMMAP": [],
-    }
-
-    key_map = {
-        "original": ("OP", "ORR", "OAP"),
-        "merge": ("MP", "MRR", "MAP"),
-        "merge2": ("MMP", "MMRR", "MMAP"),
-        "merge3": ("MMMP", "MMMRR", "MMMAP"),
-    }
-
-    query_ids = sorted(relevant.keys(), key=lambda x: int(x))
-    print(f"Evaluating {len(query_ids)} queries across 4 conditions...")
-
-    for qid in query_ids:
-        if qid not in query_embeds:
-            continue
-
-        q_vec = query_embeds[qid]
-        rel = relevant[qid]
-
-        for cond_name, cond_embeds in conditions.items():
-            sim_dict = build_sim_dict(q_vec, cond_embeds)
-            p_key, rr_key, ap_key = key_map[cond_name]
-
-            scores[p_key].append(precision_at_k(sim_dict, rel, k))
-            scores[rr_key].append(reciprocal_rank(sim_dict, rel))
-            scores[ap_key].append(average_precision(sim_dict, rel))
-
-    # Compute means
-    mean_scores = {
-        "PAK": [
-            sum(scores["OP"]) / len(scores["OP"]),
-            sum(scores["MP"]) / len(scores["MP"]),
-            sum(scores["MMP"]) / len(scores["MMP"]),
-            sum(scores["MMMP"]) / len(scores["MMMP"]),
-        ],
-        "RR": [
-            sum(scores["ORR"]) / len(scores["ORR"]),
-            sum(scores["MRR"]) / len(scores["MRR"]),
-            sum(scores["MMRR"]) / len(scores["MMRR"]),
-            sum(scores["MMMRR"]) / len(scores["MMMRR"]),
-        ],
-        "AP": [
-            sum(scores["OAP"]) / len(scores["OAP"]),
-            sum(scores["MAP"]) / len(scores["MAP"]),
-            sum(scores["MMAP"]) / len(scores["MMAP"]),
-            sum(scores["MMMAP"]) / len(scores["MMMAP"]),
-        ],
-    }
-
-    # Print results
-    conds = ["Original", "Merge", "Merge×2", "Merge×3"]
-    print(f"\n===== {dataset.upper()} RESULTS (K={k}) =====")
-    for i, cond in enumerate(conds):
-        print(f"{cond:12s} -> P@{k}: {mean_scores['PAK'][i]:.4f}, "
-              f"MRR: {mean_scores['RR'][i]:.4f}, "
-              f"MAP: {mean_scores['AP'][i]:.4f}")
-
-    # Save
-    os.makedirs(results_dir, exist_ok=True)
-
-    with open(f"{results_dir}/evaluation_scores.json", "w") as f:
-        json.dump(scores, f, indent=2)
-
-    with open(f"{results_dir}/mean_evaluation_scores.json", "w") as f:
-        json.dump(mean_scores, f, indent=2)
-
-    print(f"\nResults saved to {results_dir}/")
-    return scores, mean_scores
-
-
-if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python src/main.py <cranfield|lisa>")
-        sys.exit(1)
-    evaluate(sys.argv[1])

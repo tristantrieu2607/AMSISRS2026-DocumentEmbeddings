@@ -1,8 +1,6 @@
 # Large embedding data files
 cranfield/data/*.json
 lisa/data/*.json
-
-# Keep results
 !cranfield/results/*.json
 !lisa/results/*.json
 
