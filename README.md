@@ -1,7 +1,7 @@
 # Investigating the Topic Capacity of Document Embeddings
 
-**AMSI Summer Research Scholarship 2025–26**
-**Author:** Tristan Trieu
+**AMSI Summer Research Scholarship 2025–26**  
+**Author:** Tristan Trieu  
 **Supervisor:** Dr Laurence Park, Western Sydney University
 
 ## Abstract
